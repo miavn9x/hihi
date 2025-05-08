@@ -2,189 +2,557 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Click and Surprise</title>
     <!-- TailwindCSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Anime.js CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
     <style>
+      html, body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      
+      .main-container {
+        width: 100%;
+        height: 100vh;
+        position: relative;
+        overflow: hidden;
+      }
+      
       .popup {
         display: flex;
         flex-direction: column;
         position: absolute;
-        width: 350px;
-        height: 220px;
+        /* Fixed aspect ratio for all screen sizes */
+        aspect-ratio: 350 / 220;
         opacity: 0;
         z-index: 10;
+        transform-origin: center;
+        overflow: hidden;
+        box-sizing: border-box;
       }
-      .popup.visible { opacity: 1; }
+      
+      .popup-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+      }
+      
+      .popup.visible { 
+        opacity: 1; 
+      }
+      
       .heart, .snowflake, .star, .cloud, .moon, .catpaw {
         position: absolute;
         pointer-events: none;
+        z-index: 999;
+      }
+      
+      /* Improved responsive sizing with fixed dimensions */
+      @media (max-width: 479px) {
+        .popup {
+          width: 75vw;
+          max-width: 250px;
+        }
+      }
+      
+      @media (min-width: 480px) and (max-width: 639px) {
+        .popup {
+          width: 65vw;
+          max-width: 300px;
+        }
+      }
+      
+      @media (min-width: 640px) and (max-width: 767px) {
+        .popup {
+          width: 45vw;
+          max-width: 320px;
+        }
+      }
+      
+      @media (min-width: 768px) and (max-width: 1023px) {
+        .popup {
+          width: 35vw;
+          max-width: 340px;
+        }
+      }
+      
+      @media (min-width: 1024px) {
+        .popup {
+          width: 320px;
+        }
+      }
+      
+      /* Prevent text selection */
+      * {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+      
+      /* Fix for Safari */
+      img {
+        -webkit-user-drag: none;
+        max-width: 100%;
+        height: auto;
       }
     </style>
   </head>
-  <body class="bg-pink-100 flex justify-center items-center h-screen font-sans overflow-hidden relative">
-    <div class="container text-center z-20">
-      <button
-        id="clickButton"
-        class="bg-pink-300 text-white py-3 px-6 rounded-lg text-xl cursor-pointer hover:scale-110 transform transition-transform duration-300"
-      >
-        Click vào đây
-      </button>
+  <body class="bg-pink-100 font-sans">
+    <div class="main-container" id="mainContainer">
+      <div class="container text-center z-20 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+        <button
+          id="clickButton"
+          class="bg-pink-300 text-white py-2 px-4 sm:py-3 sm:px-6 rounded-lg text-sm sm:text-base md:text-lg cursor-pointer hover:scale-105 active:scale-95 transform transition-transform duration-200 touch-manipulation shadow-md"
+        >
+          Click vào đây
+        </button>
+      </div>
     </div>
 
     <script>
       const clickButton = document.getElementById("clickButton");
-      const maxPopups = 80;
+      const mainContainer = document.getElementById("mainContainer");
       let generating = false;
       let nextTimeout = null;
+      
+      // Mảng lưu trữ các vị trí đã sử dụng để tránh chồng chéo
+      const usedPositions = [];
 
-      // --- chuẩn bị decorative icons chỉ 1 lần ---
       const iconsConfig = [
         { type: "heart", src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725395/klipartz.com_2_qjdmlj.png" },
-        { type: "snowflake", src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725395/klipartz.com_2_qjdmlj.png" },
+        { type: "snowflake", src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725396/klipartz.com_1_piexmb.png" },
         { type: "star", src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725396/klipartz.com_9_xynwhs.png" },
         { type: "cloud", src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725647/klipartz.com_6_x9trut.png" },
         { type: "moon", src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725395/klipartz.com_3_bu1sd5.png" },
         { type: "catpaw", src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725395/klipartz.com_kcq7bd.png" },
       ];
+
+      // Responsive configuration based on device size with slower animations for small screens
+      function getDeviceConfig() {
+        const width = window.innerWidth;
+        if (width < 400) {
+          return { 
+            visiblePopups: 20,       // Số lượng popup hiển thị cùng lúc
+            delayMin: 600, 
+            delayMax: 800, 
+            iconsPerType: 1, 
+            animDuration: [4000, 5000],
+            popupAnimDuration: 1200,
+            padding: 5,  // Giảm padding để hiển thị gần viền hơn
+            iconSize: 12
+          };
+        } else if (width < 640) {
+          return { 
+            visiblePopups: 40,
+            delayMin: 500, 
+            delayMax: 700, 
+            iconsPerType: 1, 
+            animDuration: [3500, 4500], 
+            popupAnimDuration: 1000,
+            padding: 5,  // Giảm padding để hiển thị gần viền hơn
+            iconSize: 16
+          };
+        } else if (width < 1024) {
+          return { 
+            visiblePopups: 60,
+            delayMin: 350, 
+            delayMax: 550, 
+            iconsPerType: 2, 
+            animDuration: [3000, 4000], 
+            popupAnimDuration: 900,
+            padding: 5,  // Giảm padding để hiển thị gần viền hơn
+            iconSize: 20
+          };
+        } else {
+          return { 
+            visiblePopups: 80,
+            delayMin: 250, 
+            delayMax: 450, 
+            iconsPerType: 3, 
+            animDuration: [2500, 3500], 
+            popupAnimDuration: 800,
+            padding: 5,  // Giảm padding để hiển thị gần viền hơn
+            iconSize: 24
+          };
+        }
+      }
+
       function createDecorativeIcon(type, src, size) {
         const icon = document.createElement("img");
         icon.src = src;
         icon.alt = type;
-        icon.classList.add(type, `w-${size}`, `h-${size}`, "z-50");
+        icon.classList.add(type, "z-5");
+        icon.style.width = `${size}px`;
+        icon.style.height = `${size}px`;
         resetIcon(icon);
-        document.body.appendChild(icon);
+        mainContainer.appendChild(icon);
         return icon;
       }
+
       function resetIcon(icon) {
+        const config = getDeviceConfig();
         icon.style.left = `${Math.random() * window.innerWidth}px`;
-        icon.style.top = `-24px`;
+        icon.style.top = `-${config.iconSize}px`;
       }
 
-      // Sinh decorative icons một lần
+      // Create decorative icons
       const decorativeIcons = [];
-      iconsConfig.forEach(cfg => {
-        for (let i = 0; i < 6; i++) {
-          decorativeIcons.push(createDecorativeIcon(cfg.type, cfg.src, 6));
-        }
-      });
-      // Khởi animation cho icons
-      decorativeIcons.forEach((icon, i) => {
-        anime({
-          targets: icon,
-          translateY: [0, window.innerHeight + 50],
-          translateX: () => anime.random(-100, 100),
-          rotate: anime.random(-30, 30),
-          scale: anime.random(0.7, 1.3),
-          opacity: [0, 1, 0],
-          easing: "easeInOutSine",
-          duration: anime.random(4000, 6000),
-          loop: true,
-          delay: i * 300,
-          update(anim) {
-            if (anim.progress > 95) {
-              resetIcon(icon);
-              anim.seek(0);
-            }
+      let config = getDeviceConfig();
+      
+      // Initialize icons based on device configuration
+      function initializeIcons() {
+        // Clear existing icons
+        decorativeIcons.forEach(icon => {
+          if (icon && icon.parentNode) {
+            icon.parentNode.removeChild(icon);
           }
         });
-      });
+        decorativeIcons.length = 0;
+        
+        // Create new icons based on current config
+        config = getDeviceConfig();
+        iconsConfig.forEach(cfg => {
+          for (let i = 0; i < config.iconsPerType; i++) {
+            decorativeIcons.push(createDecorativeIcon(cfg.type, cfg.src, config.iconSize));
+          }
+        });
+        
+        // Animate icons with slower animations for small screens
+        decorativeIcons.forEach((icon, i) => {
+          anime({
+            targets: icon,
+            translateY: [0, window.innerHeight + config.iconSize],
+            translateX: () => anime.random(-20, 20),
+            rotate: anime.random(-10, 10),
+            scale: anime.random(0.8, 1.1),
+            opacity: [0, 0.7, 0],
+            easing: "easeInOutSine",
+            duration: anime.random(config.animDuration[0], config.animDuration[1]),
+            loop: true,
+            delay: i * (window.innerWidth < 640 ? 350 : 250), // Longer delay for small screens
+            zindex: 999,
+            update(anim) {
+              if (anim.progress > 95) {
+                resetIcon(icon);
+                anim.seek(0);
+              }
+            }
+          });
+        });
+      }
+      
+      // Initialize icons on load
+      initializeIcons();
 
-      clickButton.addEventListener("click", () => {
+      // Button interaction
+      clickButton.addEventListener("click", handleInteraction);
+      clickButton.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        handleInteraction();
+      }, { passive: false });
+
+      function handleInteraction() {
         if (generating) return;
         generating = true;
         document.querySelector(".container").classList.add("hidden");
-        scheduleNextPopup();
-      });
+        
+        // Bắt đầu vòng lặp vô hạn
+        createPopupsInfinitely();
+      }
 
-      function scheduleNextPopup() {
-        // random delay từ 100ms đến 300ms
-        const delay = Math.random() * (300 - 100) + 100;
+      function createPopupsInfinitely() {
+        config = getDeviceConfig();
+        const delay = Math.random() * (config.delayMax - config.delayMin) + config.delayMin;
+        
         nextTimeout = setTimeout(() => {
           createPopup();
-          scheduleNextPopup();
+          
+          // Tiếp tục vòng lặp vô hạn
+          createPopupsInfinitely();
         }, delay);
       }
 
+      // Kiểm tra xem vị trí mới có chồng lên vị trí cũ không
+      function isOverlapping(newLeft, newTop, newWidth, newHeight) {
+        const margin = 5; // Giảm khoảng cách tối thiểu giữa các popup để chúng có thể hiển thị gần nhau hơn
+        
+        for (const pos of usedPositions) {
+          // Kiểm tra xem hai hình chữ nhật có chồng lên nhau không
+          if (!(newLeft + newWidth + margin < pos.left || 
+                newLeft > pos.left + pos.width + margin || 
+                newTop + newHeight + margin < pos.top || 
+                newTop > pos.top + pos.height + margin)) {
+            return true; // Có chồng chéo
+          }
+        }
+        
+        return false; // Không chồng chéo
+      }
+
+      // Tìm vị trí ngẫu nhiên không chồng chéo
+      function findNonOverlappingPosition(width, height) {
+        const config = getDeviceConfig();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // Cho phép popup hiển thị sát viền màn hình hơn
+        const maxLeft = viewportWidth - width;
+        const maxTop = viewportHeight - height;
+        
+        let left, top;
+        let attempts = 0;
+        const maxAttempts = 150; // Giới hạn số lần thử để tránh vòng lặp vô hạn
+        
+        do {
+          // Cho phép popup hiển thị ở bất kỳ vị trí nào trên màn hình, kể cả sát viền
+          left = Math.random() * maxLeft;
+          top = Math.random() * maxTop;
+          attempts++;
+          
+          // Nếu đã thử quá nhiều lần mà không tìm được vị trí phù hợp, hãy xóa vị trí cũ nhất
+          if (attempts > maxAttempts) {
+            if (usedPositions.length > 0) {
+              usedPositions.shift(); // Xóa vị trí cũ nhất
+            } else {
+              break; // Nếu không có vị trí nào, thoát khỏi vòng lặp
+            }
+          }
+        } while (isOverlapping(left, top, width, height) && attempts < maxAttempts);
+        
+        // Thêm vị trí mới vào danh sách
+        usedPositions.push({ left, top, width, height });
+        
+        // Giới hạn số lượng vị trí được lưu trữ
+        if (usedPositions.length > config.visiblePopups) {
+          usedPositions.shift(); // Xóa vị trí cũ nhất
+        }
+        
+        return { left, top };
+      }
+
       function createPopup() {
-        // nếu vượt max, remove cũ nhất
+        config = getDeviceConfig();
+        
+        // Kiểm tra số lượng popup hiện tại
         const existing = document.querySelectorAll(".popup");
-        if (existing.length >= maxPopups) existing[0].remove();
+        if (existing.length >= config.visiblePopups) {
+          // Xóa popup cũ nhất
+          existing[0].remove();
+        }
 
         const popup = document.createElement("div");
         popup.classList.add("popup", "bg-white", "border-4", "border-pink-300", "rounded-lg", "shadow-2xl");
 
-        // header
+        // Create popup header
         const header = document.createElement("div");
-        header.classList.add("popup-header", "bg-pink-300", "p-2", "flex", "justify-between", "items-center", "rounded-t-lg", "relative");
+        header.classList.add("popup-header", "bg-pink-300", "p-2", "sm:p-3", "flex", "justify-between", "items-center", "rounded-t-lg", "relative");
+        
         const img = document.createElement("img");
         img.src = "https://img.lostbird.vn/2019/12/meo-2.jpg";
         img.alt = "Cat";
-        img.classList.add("absolute", "-top-3", "-left-3", "w-10", "h-10", "rounded-full");
+        img.classList.add("absolute", "-top-2", "-left-2", "w-6", "h-6", "sm:w-8", "sm:h-8", "rounded-full");
         header.appendChild(img);
-        ["minimize","maximize","close"].forEach(cls => {
+        
+        // Create window control buttons
+        ["minimize", "maximize", "close"].forEach(cls => {
           const btn = document.createElement("div");
-          btn.classList.add(cls, "w-3","h-3","rounded-full","cursor-pointer");
+          btn.classList.add(cls, "w-2", "h-2", "sm:w-3", "sm:h-3", "rounded-full", "cursor-pointer");
           btn.classList.add(
-            cls==="minimize"?"bg-yellow-400":
-            cls==="maximize"?"bg-green-400":"bg-red-400"
+            cls === "minimize" ? "bg-yellow-400" :
+            cls === "maximize" ? "bg-green-400" : "bg-red-400"
           );
           header.appendChild(btn);
         });
 
-        // body
+        // Create popup body with fixed proportions
         const body = document.createElement("div");
-        body.classList.add("popup-body", "p-6","flex","flex-col","justify-center","items-center","text-xl","text-pink-600","text-center","relative");
+        body.classList.add("popup-body", "p-3", "sm:p-4", "text-pink-600", "text-center", "relative");
+        
         const text = document.createElement("div");
         text.innerText = "hé lô cưng";
+        text.classList.add("text-sm", "sm:text-base", "font-bold", "mb-2");
+
         const cat = document.createElement("img");
         cat.src = "https://img.lostbird.vn/2019/12/meo-2.jpg";
         cat.alt = "Cat";
-        cat.classList.add("mt-2","w-24","h-24");
+        cat.classList.add("mt-2", "w-10", "h-10", "sm:w-14", "sm:h-14", "object-cover", "rounded-full", "mx-auto");
+        
         const paw = document.createElement("img");
         paw.src = "https://img.icons8.com/emoji/48/000000/paw-prints.png";
         paw.alt = "Paw";
-        paw.classList.add("absolute","top-2","right-2","w-6","h-6");
+        paw.classList.add("absolute", "top-2", "right-2", "w-4", "h-4", "sm:w-5", "sm:h-5");
+        
         body.append(text, cat, paw);
-
         popup.append(header, body);
-        document.body.appendChild(popup);
+        mainContainer.appendChild(popup);
 
-        popup.style.left = `${Math.random()*(window.innerWidth-350)}px`;
-        popup.style.top  = `${Math.random()*(window.innerHeight-220)}px`;
+        // Calculate popup position with fixed dimensions to maintain aspect ratio
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // Get popup dimensions based on media queries
+        let popupWidth;
+        if (viewportWidth < 480) {
+          popupWidth = Math.min(viewportWidth * 0.75, 350);
+        } else if (viewportWidth < 640) {
+          popupWidth = Math.min(viewportWidth * 0.65, 400);
+        } else if (viewportWidth < 768) {
+          popupWidth = Math.min(viewportWidth * 0.45, 420);
+        } else if (viewportWidth < 1024) {
+          popupWidth = Math.min(viewportWidth * 0.35, 440);
+        } else {
+          popupWidth = 320;
+        }
+        
+        // Calculate height based on fixed aspect ratio
+        const popupHeight = popupWidth * (220 / 350);
+        
+        // Set explicit dimensions to maintain aspect ratio
+        popup.style.width = `${popupWidth}px`;
+        popup.style.height = `${popupHeight}px`;
+        
+        // Tìm vị trí không chồng chéo
+        const position = findNonOverlappingPosition(popupWidth, popupHeight);
+        
+        popup.style.left = `${position.left}px`;
+        popup.style.top = `${position.top}px`;
 
+        // Animate popup appearance with slower animations for small screens
         setTimeout(() => {
           popup.classList.add("visible");
+          
+          // Slower animation for small screens
           anime({
             targets: popup,
-            scale: [0,1],
-            rotate: [anime.random(-15,15),0],
-            translateY: [60,0],
-            opacity: [0,1],
-            easing: "spring(1,90,12,0)",
-            duration: 1000,
+            scale: [0, 1],
+            rotate: [anime.random(-10, 10), 0],
+            translateY: [40, 0],
+            opacity: [0, 1],
+            easing: "spring(1, 80, 10, 0)", // Gentler spring effect
+            duration: config.popupAnimDuration, // Use device-specific duration
+
           });
+          
+          // Slower cat animation for small screens
           anime({
             targets: cat,
-            scale: [1,1.15,1],
+            scale: [1, 1.1, 1],
             easing: "easeInOutQuad",
-            duration: 1200,
+            duration: config.popupAnimDuration + 200,
             loop: true,
           });
+          
+          // Slower paw animation for small screens
           anime({
             targets: paw,
-            translateY: [-12,0],
-            rotate: [0,anime.random(-20,20)],
+            translateY: [-5, 0], // Reduced movement
+            rotate: [0, anime.random(-10, 10)], // Reduced rotation
             easing: "easeInOutQuad",
-            duration: 700,
+            duration: config.popupAnimDuration - 200,
             loop: true,
             direction: "alternate",
           });
-        }, 100);
+        }, 50);
+        
+        // Thêm sự kiện click để xóa popup khi nhấp vào nút đóng
+        const closeBtn = popup.querySelector(".close");
+        if (closeBtn) {
+          closeBtn.addEventListener("click", () => {
+            // Xóa vị trí này khỏi danh sách vị trí đã sử dụng
+            const index = usedPositions.findIndex(pos => 
+              pos.left === parseFloat(popup.style.left) && 
+              pos.top === parseFloat(popup.style.top)
+            );
+            
+            if (index !== -1) {
+              usedPositions.splice(index, 1);
+            }
+            
+            // Animation khi đóng
+            anime({
+              targets: popup,
+              scale: [1, 0],
+              opacity: [1, 0],
+              easing: "easeOutQuad",
+              duration: 300,
+              complete: function() {
+                popup.remove();
+              }
+            });
+          });
+        }
       }
+
+      // Handle window resize with better aspect ratio preservation
+      let resizeTimeout;
+      window.addEventListener("resize", () => {
+        // Debounce resize event
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+          config = getDeviceConfig();
+          
+          // Xóa danh sách vị trí đã sử dụng khi thay đổi kích thước
+          usedPositions.length = 0;
+          
+          // Reinitialize icons on significant size changes
+          initializeIcons();
+          
+          // Reposition and resize popups to maintain aspect ratio
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+          
+          document.querySelectorAll(".popup").forEach(popup => {
+            // Recalculate popup dimensions based on new viewport
+            let popupWidth;
+            if (viewportWidth < 480) {
+              popupWidth = Math.min(viewportWidth * 0.75, 250);
+            } else if (viewportWidth < 640) {
+              popupWidth = Math.min(viewportWidth * 0.65, 300);
+            } else if (viewportWidth < 768) {
+              popupWidth = Math.min(viewportWidth * 0.45, 320);
+            } else if (viewportWidth < 1024) {
+              popupWidth = Math.min(viewportWidth * 0.35, 340);
+            } else {
+              popupWidth = 320;
+            }
+            
+            // Calculate height based on fixed aspect ratio
+            const popupHeight = popupWidth * (220 / 350);
+            
+            // Update dimensions
+            popup.style.width = `${popupWidth}px`;
+            popup.style.height = `${popupHeight}px`;
+            
+            // Recalculate position constraints - allow popups to be positioned at the edges
+            const maxLeft = viewportWidth - popupWidth;
+            const maxTop = viewportHeight - popupHeight;
+            
+            // Ensure popup stays within bounds after resize
+            const left = Math.min(Math.max(0, parseFloat(popup.style.left) || 0), maxLeft);
+            const top = Math.min(Math.max(0, parseFloat(popup.style.top) || 0), maxTop);
+            
+            popup.style.left = `${left}px`;
+            popup.style.top = `${top}px`;
+            
+            // Thêm vị trí mới vào danh sách
+            usedPositions.push({ 
+              left: left, 
+              top: top, 
+              width: popupWidth, 
+              height: popupHeight 
+            });
+          });
+        }, 200);
+      });
     </script>
   </body>
 </html>
