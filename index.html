@@ -9,7 +9,6 @@
     <!-- Anime.js CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
     <style>
-      /* Custom styles for specific animations */
       .popup {
         display: flex;
         flex-direction: column;
@@ -17,27 +16,17 @@
         width: 350px;
         height: 220px;
         opacity: 0;
+        z-index: 10;
       }
-
-      .popup.visible {
-        opacity: 1;
-      }
-
-      .heart,
-      .snowflake,
-      .star,
-      .cloud,
-      .moon,
-      .catpaw {
+      .popup.visible { opacity: 1; }
+      .heart, .snowflake, .star, .cloud, .moon, .catpaw {
         position: absolute;
         pointer-events: none;
       }
     </style>
   </head>
-  <body
-    class="bg-pink-100 flex justify-center items-center h-screen font-sans overflow-hidden relative"
-  >
-    <div class="container text-center z-10">
+  <body class="bg-pink-100 flex justify-center items-center h-screen font-sans overflow-hidden relative">
+    <div class="container text-center z-20">
       <button
         id="clickButton"
         class="bg-pink-300 text-white py-3 px-6 rounded-lg text-xl cursor-pointer hover:scale-110 transform transition-transform duration-300"
@@ -48,213 +37,151 @@
 
     <script>
       const clickButton = document.getElementById("clickButton");
-      const delay = 150;
-      let spawnInterval = null;
+      const maxPopups = 80;
+      let generating = false;
+      let nextTimeout = null;
 
-      clickButton.addEventListener("click", function () {
-        // Nếu đã đang chạy thì không khởi động lại
-        if (spawnInterval) return;
+      // --- chuẩn bị decorative icons chỉ 1 lần ---
+      const iconsConfig = [
+        { type: "heart", src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725395/klipartz.com_2_qjdmlj.png" },
+        { type: "snowflake", src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725395/klipartz.com_2_qjdmlj.png" },
+        { type: "star", src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725396/klipartz.com_9_xynwhs.png" },
+        { type: "cloud", src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725647/klipartz.com_6_x9trut.png" },
+        { type: "moon", src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725395/klipartz.com_3_bu1sd5.png" },
+        { type: "catpaw", src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725395/klipartz.com_kcq7bd.png" },
+      ];
+      function createDecorativeIcon(type, src, size) {
+        const icon = document.createElement("img");
+        icon.src = src;
+        icon.alt = type;
+        icon.classList.add(type, `w-${size}`, `h-${size}`, "z-50");
+        resetIcon(icon);
+        document.body.appendChild(icon);
+        return icon;
+      }
+      function resetIcon(icon) {
+        icon.style.left = `${Math.random() * window.innerWidth}px`;
+        icon.style.top = `-24px`;
+      }
 
-        // Ẩn container chứa nút ngay lập tức
-        document.querySelector(".container").classList.add("hidden");
-
-        // Bắt đầu tạo popup liên tục
-        spawnInterval = setInterval(createPopup, delay);
+      // Sinh decorative icons một lần
+      const decorativeIcons = [];
+      iconsConfig.forEach(cfg => {
+        for (let i = 0; i < 6; i++) {
+          decorativeIcons.push(createDecorativeIcon(cfg.type, cfg.src, 6));
+        }
+      });
+      // Khởi animation cho icons
+      decorativeIcons.forEach((icon, i) => {
+        anime({
+          targets: icon,
+          translateY: [0, window.innerHeight + 50],
+          translateX: () => anime.random(-100, 100),
+          rotate: anime.random(-30, 30),
+          scale: anime.random(0.7, 1.3),
+          opacity: [0, 1, 0],
+          easing: "easeInOutSine",
+          duration: anime.random(4000, 6000),
+          loop: true,
+          delay: i * 300,
+          update(anim) {
+            if (anim.progress > 95) {
+              resetIcon(icon);
+              anim.seek(0);
+            }
+          }
+        });
       });
 
+      clickButton.addEventListener("click", () => {
+        if (generating) return;
+        generating = true;
+        document.querySelector(".container").classList.add("hidden");
+        scheduleNextPopup();
+      });
+
+      function scheduleNextPopup() {
+        // random delay từ 100ms đến 300ms
+        const delay = Math.random() * (300 - 100) + 100;
+        nextTimeout = setTimeout(() => {
+          createPopup();
+          scheduleNextPopup();
+        }, delay);
+      }
+
       function createPopup() {
+        // nếu vượt max, remove cũ nhất
+        const existing = document.querySelectorAll(".popup");
+        if (existing.length >= maxPopups) existing[0].remove();
+
         const popup = document.createElement("div");
-        popup.classList.add(
-          "popup",
-          "bg-white",
-          "border-4",
-          "border-pink-300",
-          "rounded-lg",
-          "shadow-2xl"
-        );
+        popup.classList.add("popup", "bg-white", "border-4", "border-pink-300", "rounded-lg", "shadow-2xl");
 
-        // Header
+        // header
         const header = document.createElement("div");
-        header.classList.add(
-          "popup-header",
-          "bg-pink-300",
-          "p-2",
-          "flex",
-          "justify-between",
-          "items-center",
-          "rounded-t-lg",
-          "relative"
-        );
-
-        const cheeseImg = document.createElement("img");
-        cheeseImg.src = "https://img.lostbird.vn/2019/12/meo-2.jpg";
-        cheeseImg.alt = "Cute Cat";
-        cheeseImg.classList.add(
-          "absolute",
-          "-top-3",
-          "-left-3",
-          "w-10",
-          "h-10",
-          "rounded-full"
-        );
-        header.appendChild(cheeseImg);
-
-        const buttons = document.createElement("div");
-        buttons.classList.add("popup-buttons", "flex", "gap-1");
-        ["minimize", "maximize", "close"].forEach((cls) => {
+        header.classList.add("popup-header", "bg-pink-300", "p-2", "flex", "justify-between", "items-center", "rounded-t-lg", "relative");
+        const img = document.createElement("img");
+        img.src = "https://img.lostbird.vn/2019/12/meo-2.jpg";
+        img.alt = "Cat";
+        img.classList.add("absolute", "-top-3", "-left-3", "w-10", "h-10", "rounded-full");
+        header.appendChild(img);
+        ["minimize","maximize","close"].forEach(cls => {
           const btn = document.createElement("div");
+          btn.classList.add(cls, "w-3","h-3","rounded-full","cursor-pointer");
           btn.classList.add(
-            cls,
-            "w-3",
-            "h-3",
-            "rounded-full",
-            "cursor-pointer"
+            cls==="minimize"?"bg-yellow-400":
+            cls==="maximize"?"bg-green-400":"bg-red-400"
           );
-          if (cls === "minimize") btn.classList.add("bg-yellow-400");
-          if (cls === "maximize") btn.classList.add("bg-green-400");
-          if (cls === "close") btn.classList.add("bg-red-400");
-          buttons.appendChild(btn);
+          header.appendChild(btn);
         });
-        header.appendChild(buttons);
 
-        // Body
+        // body
         const body = document.createElement("div");
-        body.classList.add(
-          "popup-body",
-          "p-6",
-          "flex",
-          "flex-col",
-          "justify-center",
-          "items-center",
-          "text-xl",
-          "text-pink-600",
-          "text-center",
-          "relative"
-        );
-
+        body.classList.add("popup-body", "p-6","flex","flex-col","justify-center","items-center","text-xl","text-pink-600","text-center","relative");
         const text = document.createElement("div");
         text.innerText = "hé lô cưng";
+        const cat = document.createElement("img");
+        cat.src = "https://img.lostbird.vn/2019/12/meo-2.jpg";
+        cat.alt = "Cat";
+        cat.classList.add("mt-2","w-24","h-24");
+        const paw = document.createElement("img");
+        paw.src = "https://img.icons8.com/emoji/48/000000/paw-prints.png";
+        paw.alt = "Paw";
+        paw.classList.add("absolute","top-2","right-2","w-6","h-6");
+        body.append(text, cat, paw);
 
-        const image = document.createElement("img");
-        image.src = "https://img.lostbird.vn/2019/12/meo-2.jpg";
-        image.alt = "Cute Cat";
-        image.classList.add("mt-2", "w-24", "h-24");
-
-        // Add cute paw icon
-        const pawIcon = document.createElement("img");
-        pawIcon.src = "https://img.icons8.com/emoji/48/000000/paw-prints.png";
-        pawIcon.alt = "Paw Print";
-        pawIcon.classList.add("absolute", "top-2", "right-2", "w-6", "h-6");
-
-        body.appendChild(text);
-        body.appendChild(image);
-        body.appendChild(pawIcon);
-
-        popup.appendChild(header);
-        popup.appendChild(body);
+        popup.append(header, body);
         document.body.appendChild(popup);
 
-        // Random position for popup
-        const x = Math.random() * (window.innerWidth - 350);
-        const y = Math.random() * (window.innerHeight - 220);
-        popup.style.left = `${x}px`;
-        popup.style.top = `${y}px`;
+        popup.style.left = `${Math.random()*(window.innerWidth-350)}px`;
+        popup.style.top  = `${Math.random()*(window.innerHeight-220)}px`;
 
-        // Create decorative animated icons
-        const createDecorativeIcon = (type, src, size) => {
-          const icon = document.createElement("img");
-          icon.src = src;
-          icon.alt = type;
-          icon.classList.add(type, `w-${size}`, `h-${size}`);
-          icon.style.left = `${Math.random() * window.innerWidth}px`;
-          icon.style.top = `${Math.random() * window.innerHeight}px`;
-          document.body.appendChild(icon);
-          return icon;
-        };
-
-        const icons = [
-          {
-            type: "heart",
-            src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725395/klipartz.com_2_qjdmlj.png",
-          },
-          {
-            type: "snowflake",
-            src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725395/klipartz.com_2_qjdmlj.png",
-          },
-          {
-            type: "star",
-            src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725396/klipartz.com_9_xynwhs.png",
-          },
-          {
-            type: "cloud",
-            src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725647/klipartz.com_6_x9trut.png",
-          },
-          {
-            type: "moon",
-            src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725395/klipartz.com_3_bu1sd5.png",
-          },
-          {
-            type: "catpaw",
-            src: "https://res.cloudinary.com/dsosczr7j/image/upload/v1746725395/klipartz.com_kcq7bd.png",
-          },
-        ];
-
-        const decorativeIcons = icons.flatMap((icon) => [
-          createDecorativeIcon(icon.type, icon.src, 6),
-        ]);
-
-        // Anime.js animations
         setTimeout(() => {
           popup.classList.add("visible");
-
           anime({
             targets: popup,
-            scale: [0, 1],
-            rotate: [anime.random(-15, 15), 0],
-            translateY: [60, 0],
-            opacity: [0, 1],
-            easing: "spring(1, 90, 12, 0)",
+            scale: [0,1],
+            rotate: [anime.random(-15,15),0],
+            translateY: [60,0],
+            opacity: [0,1],
+            easing: "spring(1,90,12,0)",
             duration: 1000,
           });
-
           anime({
-            targets: image,
-            scale: [1, 1.15, 1],
+            targets: cat,
+            scale: [1,1.15,1],
             easing: "easeInOutQuad",
             duration: 1200,
             loop: true,
           });
-
           anime({
-            targets: pawIcon,
-            translateY: [-12, 0],
-            rotate: [0, anime.random(-20, 20)],
+            targets: paw,
+            translateY: [-12,0],
+            rotate: [0,anime.random(-20,20)],
             easing: "easeInOutQuad",
             duration: 700,
             loop: true,
             direction: "alternate",
-          });
-
-          decorativeIcons.forEach((icon, index) => {
-            anime({
-              targets: icon,
-              translateY: [0, window.innerHeight + 50],
-              translateX: () => anime.random(-100, 100),
-              rotate: anime.random(-30, 30),
-              scale: anime.random(0.7, 1.3),
-              opacity: [0, 1, 0],
-              easing: "easeInOutSine",
-              duration: anime.random(4000, 6000),
-              loop: true,
-              delay: index * 300,
-              update: function (anim) {
-                if (anim.progress > 95) {
-                  icon.style.left = `${Math.random() * window.innerWidth}px`;
-                  icon.style.top = `-24px`;
-                  anim.seek(0);
-                }
-              },
-            });
           });
         }, 100);
       }
