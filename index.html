@@ -55,6 +55,9 @@
         // Nếu đã đang chạy thì không khởi động lại
         if (spawnInterval) return;
 
+        // Ẩn container chứa nút ngay lập tức
+        document.querySelector(".container").classList.add("hidden");
+
         // Bắt đầu tạo popup liên tục
         spawnInterval = setInterval(createPopup, delay);
       });
@@ -257,6 +260,4 @@
       }
     </script>
   </body>
-  
 </html>
-
